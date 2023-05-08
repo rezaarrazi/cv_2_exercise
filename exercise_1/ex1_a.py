@@ -10,6 +10,7 @@ def add_rows(matrix, row1, row2, scalar):
 def find_inverse(matrix, n):
     inverse = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
     operations = []
+    degenerate = False
     for i in range(n):
         if matrix[i][i] == 0:
             for j in range(i + 1, n):
@@ -19,7 +20,8 @@ def find_inverse(matrix, n):
                     operations.append(f"S {i} {j}")
                     break
             else:
-                return operations, None
+                degenerate = True
+                break
 
         pivot = matrix[i][i]
         if pivot != 1:
@@ -36,7 +38,14 @@ def find_inverse(matrix, n):
                 if scalar != 0:
                     operations.append(f"A {j} {i} {scalar}")
 
-    return operations, inverse
+    if degenerate:
+        for i in range(n):
+            if all(matrix[i][j] == 0 for j in range(n)):
+                operations.append(f"S {i} {n-1}")
+                break
+        return operations, None
+    else:
+        return operations, inverse
 
 def format_output(matrix):
     return "\n".join(" ".join(f"{x:.16f}" for x in row) for row in matrix)
