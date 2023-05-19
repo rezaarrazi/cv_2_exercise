@@ -10,7 +10,7 @@ def add_rows(matrix, row1, row2, scalar):
 def find_inverse(matrix, n):
     inverse = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
     operations = []
-    degenerate = False
+    
     for i in range(n):
         if matrix[i][i] == 0:
             for j in range(i + 1, n):
@@ -20,11 +20,10 @@ def find_inverse(matrix, n):
                     operations.append(f"S {i} {j}")
                     break
             else:
-                degenerate = True
-                break
+                continue
 
         pivot = matrix[i][i]
-        if pivot != 1:
+        if pivot != 1 and pivot != 0:
             scalar = 1 / pivot
             multiply_row(matrix, i, scalar)
             multiply_row(inverse, i, scalar)
@@ -38,17 +37,26 @@ def find_inverse(matrix, n):
                 if scalar != 0:
                     operations.append(f"A {j} {i} {scalar}")
 
+    degenerate = False
+    for i in range(n):
+        if all(matrix[i][j] == 0 for j in range(n)) and not all(inverse[i][j] == 0 for j in range(n)):
+            operations.append(f"S {i} {n-1}")
+            degenerate = True
+            break
+            
     if degenerate:
-        for i in range(n):
-            if all(matrix[i][j] == 0 for j in range(n)):
-                operations.append(f"S {i} {n-1}")
-                break
         return operations, None
     else:
         return operations, inverse
 
 def format_output(matrix):
-    return "\n".join(" ".join(f"{x:.16f}" for x in row) for row in matrix)
+    def format_number(x):
+        if x.is_integer():
+            return f"{int(x)}"
+        else:
+            return f"{x:.15f}"
+
+    return "\n".join(" ".join(format_number(x) for x in row) for row in matrix)
 
 def main():
     n = int(input())
