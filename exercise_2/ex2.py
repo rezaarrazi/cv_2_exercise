@@ -29,9 +29,11 @@ def project_point(X, fx, fy, cx, cy):
     return x, y
 
 def project_point_distort(X, Y, Z, fx, fy, cx, cy, omega):
+    debug(DEBUG, "projection of :", X, Y, Z)
     # Normalize the 3D point
     X_normalized = X / Z
     Y_normalized = Y / Z
+    debug(DEBUG, "P_normalized: ", X_normalized, Y_normalized)
 
     # Compute the undistorted radius
     r_undistorted = np.sqrt(X_normalized**2 + Y_normalized**2)
@@ -40,15 +42,19 @@ def project_point_distort(X, Y, Z, fx, fy, cx, cy, omega):
     if omega == 0:
         r_distorted = r_undistorted
     else:
-        r_distorted = 1/omega * np.arctan(2 * r_undistorted * np.tan(omega/2))
+        r_distorted = (1/omega) * np.arctan((2 * r_undistorted) * np.tan(omega/2))
+    
+    debug(DEBUG, "r_undistorted: ", r_undistorted)
+    debug(DEBUG, "r_distorted: ", r_distorted)
 
     # Distort the normalized point
     X_distorted = (r_distorted / r_undistorted * X_normalized) if r_undistorted != 0 else X_normalized
     Y_distorted = (r_distorted / r_undistorted * Y_normalized) if r_undistorted != 0 else Y_normalized
 
+    debug(DEBUG, "P_distorted: ", X_distorted, Y_distorted)
+
     # Apply the pinhole camera model
-    u_distorted = fx * X_distorted + cx
-    v_distorted = fy * Y_distorted + cy
+    u_distorted, v_distorted = project_point(np.array([X_distorted, Y_distorted, 1.]), fx, fy, cx, cy)
 
     return u_distorted, v_distorted
 
@@ -70,10 +76,32 @@ def back_project_point(u, v, d, fx, fy, cx, cy):
     
     return XYZ
 
+def compute_undistorted_radius(r, omega, max_iter=100, tol=1e-6):
+    # Initial guess for r_undistorted
+    r_undistorted = r
+
+    for _ in range(max_iter):
+        # Compute the distorted radius from the current guess
+        g = 1 / omega * np.arctan(2 * r_undistorted * np.tan(omega / 2))
+
+        # Compute the error in the current guess
+        error = g - r
+
+        # Check if the error is below the tolerance
+        if np.abs(error) < tol:
+            break
+
+        # Compute the derivative of the distortion function
+        g_prime = 2 * np.tan(omega / 2) / (1 + (2 * r_undistorted * np.tan(omega / 2)) ** 2)
+
+        # Update the guess for r_undistorted using the Newton-Raphson update rule
+        r_undistorted = r_undistorted - error / g_prime
+
+    return r_undistorted
+
 def back_project_distorted_point(u, v, d, fx, fy, cx, cy, omega):
-    # Construct the camera matrix K
-    K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
-    
+    debug(DEBUG, "back-projection")
+    # Normalize image coordinates
     x_n = (u - cx) / fx
     y_n = (v - cy) / fy
     
@@ -86,12 +114,19 @@ def back_project_distorted_point(u, v, d, fx, fy, cx, cy, omega):
         x_distorted = 0
         y_distorted = 0
     else:
-        # Apply the inverse distortion function to compute the undistorted radius
-        r_undistorted = np.tan(r_distorted * omega) / (2 * np.tan(omega / 2))
-    
-        # Compute the undistorted coordinates
-        x_distorted = x_n / r_distorted
-        y_distorted = y_n / r_distorted
+        if omega == 0:
+            r_undistorted = r_distorted
+            x_distorted = x_n
+            y_distorted = y_n
+        else:
+            # Apply the inverse distortion function to compute the undistorted radius
+            r_undistorted = np.tan(r_distorted * omega) / (2 * np.tan(omega / 2))
+            # r_undistorted = compute_undistorted_radius(r_distorted, omega)
+            debug(DEBUG, "r_undistorted: ", r_undistorted)
+
+            # Compute the undistorted coordinates
+            x_distorted = x_n / r_distorted
+            y_distorted = y_n / r_distorted
     
     x_undistorted = x_distorted * r_undistorted
     y_undistorted = y_distorted * r_undistorted
@@ -159,7 +194,7 @@ def main():
         debug(DEBUG, 'transformation RT: ', X_)
         
         if second_camera_params[-1] is not None:  # FOV model
-            u, v = project_point_distort(*X, *second_camera_params[2:])
+            u, v = project_point_distort(*X_[:3], *second_camera_params[2:])
         else:
             u, v = project_point(X_[:3], *second_camera_params[2:-1])
             debug(DEBUG, 'generic projection: ', u, v)
