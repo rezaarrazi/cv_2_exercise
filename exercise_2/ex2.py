@@ -8,11 +8,8 @@ def debug(on=False, *args):
 
 def transform_point(X, RT):
     X_hom = np.append(X, 1)
-
-    debug(DEBUG, "X_hom: ", X_hom)
-    debug(DEBUG, "RT: ", RT)
     
-    return np.dot(RT, X_hom)
+    return np.dot(RT, X_hom.T)
 
 def project_point(X, fx, fy, cx, cy):
     # Construct the camera matrix K
@@ -29,11 +26,11 @@ def project_point(X, fx, fy, cx, cy):
     return x, y
 
 def project_point_distort(X, Y, Z, fx, fy, cx, cy, omega):
-    debug(DEBUG, "projection of :", X, Y, Z)
+    # debug(DEBUG, "projection of :", X, Y, Z)
     # Normalize the 3D point
     X_normalized = X / Z
     Y_normalized = Y / Z
-    debug(DEBUG, "P_normalized: ", X_normalized, Y_normalized)
+    # debug(DEBUG, "P_normalized: ", X_normalized, Y_normalized)
 
     # Compute the undistorted radius
     r_undistorted = np.sqrt(X_normalized**2 + Y_normalized**2)
@@ -44,14 +41,14 @@ def project_point_distort(X, Y, Z, fx, fy, cx, cy, omega):
     else:
         r_distorted = (1/omega) * np.arctan((2 * r_undistorted) * np.tan(omega/2))
     
-    debug(DEBUG, "r_undistorted: ", r_undistorted)
-    debug(DEBUG, "r_distorted: ", r_distorted)
+    # debug(DEBUG, "r_undistorted: ", r_undistorted)
+    # debug(DEBUG, "r_distorted: ", r_distorted)
 
     # Distort the normalized point
     X_distorted = (r_distorted / r_undistorted * X_normalized) if r_undistorted != 0 else X_normalized
     Y_distorted = (r_distorted / r_undistorted * Y_normalized) if r_undistorted != 0 else Y_normalized
 
-    debug(DEBUG, "P_distorted: ", X_distorted, Y_distorted)
+    # debug(DEBUG, "P_distorted: ", X_distorted, Y_distorted)
 
     # Apply the pinhole camera model
     u_distorted, v_distorted = project_point(np.array([X_distorted, Y_distorted, 1.]), fx, fy, cx, cy)
@@ -76,29 +73,6 @@ def back_project_point(u, v, d, fx, fy, cx, cy):
     
     return XYZ
 
-def compute_undistorted_radius(r, omega, max_iter=100, tol=1e-6):
-    # Initial guess for r_undistorted
-    r_undistorted = r
-
-    for _ in range(max_iter):
-        # Compute the distorted radius from the current guess
-        g = 1 / omega * np.arctan(2 * r_undistorted * np.tan(omega / 2))
-
-        # Compute the error in the current guess
-        error = g - r
-
-        # Check if the error is below the tolerance
-        if np.abs(error) < tol:
-            break
-
-        # Compute the derivative of the distortion function
-        g_prime = 2 * np.tan(omega / 2) / (1 + (2 * r_undistorted * np.tan(omega / 2)) ** 2)
-
-        # Update the guess for r_undistorted using the Newton-Raphson update rule
-        r_undistorted = r_undistorted - error / g_prime
-
-    return r_undistorted
-
 def back_project_distorted_point(u, v, d, fx, fy, cx, cy, omega):
     debug(DEBUG, "back-projection")
     # Normalize image coordinates
@@ -121,7 +95,6 @@ def back_project_distorted_point(u, v, d, fx, fy, cx, cy, omega):
         else:
             # Apply the inverse distortion function to compute the undistorted radius
             r_undistorted = np.tan(r_distorted * omega) / (2 * np.tan(omega / 2))
-            # r_undistorted = compute_undistorted_radius(r_distorted, omega)
             debug(DEBUG, "r_undistorted: ", r_undistorted)
 
             # Compute the undistorted coordinates
@@ -192,6 +165,10 @@ def main():
         debug(DEBUG, 'back projected: ', X)
         X_ = transform_point(X, transformation)
         debug(DEBUG, 'transformation RT: ', X_)
+        
+        if X_[2] < 0.000:
+            print("OB")
+            continue
         
         if second_camera_params[-1] is not None:  # FOV model
             u, v = project_point_distort(*X_[:3], *second_camera_params[2:])
