@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.linalg import rq
 
 DEBUG = False
 
@@ -22,16 +21,23 @@ def solve_projection_matrix(Q):
     
     return P
 
-def decompose_projection_matrix(M):
-    # Separate the last column of M (the translation vector t)
+def decompose_projection_matrix_qr(M):
     debug(DEBUG, 'M:')
     debug(DEBUG, M)
-
+    
+    # Separate the last column of M (the translation vector t)
     M_t = M[:, 3]
     K_R = M[:, :3]
 
-    # Perform RQ decomposition on M to get K and R
-    K, R = rq(K_R)
+    P = np.fliplr(np.eye(K_R.shape[0]))
+
+    A_hat = np.dot(P, K_R)
+
+    # Perform QR decomposition on A_hat transpose to get Q_hat and R_hat
+    Q_hat, R_hat = np.linalg.qr(A_hat.T)
+
+    R = np.dot(P, Q_hat.T)
+    K = np.dot(np.dot(P, R_hat.T), P)
 
     # Normalize K so that K[2, 2] is 1
     scale = 1 / K[2, 2]
@@ -39,8 +45,6 @@ def decompose_projection_matrix(M):
     
     # Ensure that the diagonal elements of K are all positive
     T = np.diag(np.sign(np.diag(K)))
-    # if np.linalg.det(T) < 0:
-    #     T[1, 1] *= -1
     
     # Correct K and RT
     K = np.dot(K, T)
@@ -76,7 +80,7 @@ def main():
         Q = np.append(Q, get_matrix_q_i(point_3d[i], points_2d[i]), axis=0)
     
     P = solve_projection_matrix(Q)
-    K, R, t = decompose_projection_matrix(P)
+    K, R, t = decompose_projection_matrix_qr(P)
     
     for r in K:
         print("{}\t{}\t{}".format(round(r[0]), round(r[1]), round(r[2])))
